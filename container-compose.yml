@@ -1,0 +1,17 @@
+version: '1'
+services:
+    http-server:
+        image: quay.io/loadtheaccumulator/edge-frontend:podmandev
+        restart: always
+        ports:
+          - 8889:8889
+
+    edge-ui:
+        image: quay.io/loadtheaccumulator/edge-frontend:podmandev
+        restart: always
+        ports:
+          - 1337:1337
+        environment:
+            BETA: "true"
+        entrypoint: ['npm', 'run', 'start:proxy']
+        depends-on: http-server
