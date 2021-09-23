@@ -15,3 +15,5 @@ services:
             BETA: "true"
         entrypoint: ['npm', 'run', 'start:proxy']
         depends-on: http-server
+        volumes:
+          - /home/jhollowa/dev/git/RedHatInsights/edge-frontend:/opt/app-root:Z
