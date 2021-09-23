@@ -8,7 +8,7 @@ RUN dnf remove -y nodejs-nodemon
 ADD . /opt/app-root
 
 # Install the dependencies
-RUN cd /opt/app-root && npm install
+RUN cd /opt/app-root && npm install npm@latest -g && npm install
 
 # Setup cloud services
 RUN cd / && git clone https://github.com/RedHatInsights/cloud-services-config.git
