@@ -3,12 +3,13 @@ USER root
 
 # remove nodejs-nodemon vulnerability
 RUN dnf remove -y nodejs-nodemon
+RUN dnf update -y nodejs
 
 # Add application sources
 ADD . /opt/app-root
 
 # Install the dependencies
-RUN cd /opt/app-root && npm install npm@latest -g && npm install
+RUN cd /opt/app-root && npm install
 
 # Setup cloud services
 RUN cd / && git clone https://github.com/RedHatInsights/cloud-services-config.git
