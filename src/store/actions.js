@@ -1,5 +1,4 @@
 import {
-  LOAD_GROUPS,
   LOAD_TRESHOLD,
   LOAD_DEVICES_INFO,
   LOAD_CANARIES_INFO,
@@ -10,55 +9,52 @@ import {
   CLEAN_ENTITIES,
   LOAD_ACTIVE_IMAGES,
   LOAD_EDGE_IMAGES,
+  LOAD_EDGE_IMAGE_SETS,
+  LOAD_EDGE_IMAGE_PACKAGES,
   LOAD_DEVICE_SUMMARY,
   LOAD_IMAGE_STATUS,
   LOAD_IMAGE_DETAIL,
+  LOAD_IMAGE_SET_DETAIL,
   CREATE_NEW_IMAGE,
   POLLING_IMAGES,
+  LOAD_DEVICE_TABLE,
 } from './action-types';
-import {
-  fetchGroups,
-  threshold,
-  devicesInfo,
-  canariesInfo,
-  groupsDetail,
-  groupDevicesInfo,
-  fetchActiveImages,
-  fetchDeviceSummary,
-  fetchImageStatus,
-  fetchImage,
-  fetchEdgeImages,
-  createImage,
-} from '../api';
 
-export const loadGroups = (perPage = 50, page = 1) => ({
-  type: LOAD_GROUPS,
-  payload: fetchGroups({ perPage, page }),
-});
+import {
+  fetchImageStatus,
+  getImageById,
+  fetchEdgeImages,
+  fetchEdgeImageSets,
+  getImagePackageMetadata,
+  createImage,
+  getImageSet,
+  fetchActiveImages,
+} from '../api/images';
+import { getInventory } from '../api/devices';
 
 export const loadThreshold = () => ({
   type: LOAD_TRESHOLD,
-  payload: threshold(),
+  payload: () => {},
 });
 
-export const loadDevicesInfo = (systemsCount) => ({
+export const loadDevicesInfo = () => ({
   type: LOAD_DEVICES_INFO,
-  payload: devicesInfo(systemsCount),
+  payload: () => {},
 });
 
 export const loadCanariesInfo = () => ({
   type: LOAD_CANARIES_INFO,
-  payload: canariesInfo(),
+  payload: () => {},
 });
 
-export const loadGroupsDetail = (uuid, page, perPage) => ({
+export const loadGroupsDetail = () => ({
   type: LOAD_GROUP_DETAIL,
-  payload: groupsDetail(uuid, { page, perPage }),
+  payload: () => {},
 });
 
-export const loadGroupDevicesInfo = (uuid) => ({
+export const loadGroupDevicesInfo = () => ({
   type: LOAD_GROUP_DEVICES_INFO,
-  payload: groupDevicesInfo(uuid),
+  payload: () => {},
 });
 
 export const selectEntity = (id, selected) => ({
@@ -103,7 +99,7 @@ export const loadImages = (dispatch, pagination) => {
 export const loadDeviceSummary = (dispatch) => {
   dispatch({
     type: LOAD_DEVICE_SUMMARY,
-    payload: fetchDeviceSummary,
+    payload: () => {},
     meta: {
       notifications: {
         rejected: {
@@ -129,7 +125,7 @@ export const loadImageStatus = (dispatch, imageId) => {
 export const loadImageDetail = (dispatch, imageId) => {
   dispatch({
     type: LOAD_IMAGE_DETAIL,
-    payload: fetchImage({ id: imageId }),
+    payload: getImageById({ id: imageId }),
   }).catch(() => null);
 };
 
@@ -146,6 +142,13 @@ export const loadEdgeImages = (dispatch, query) => {
   dispatch({
     type: LOAD_EDGE_IMAGES,
     payload: fetchEdgeImages(query),
+  }).catch(() => null);
+};
+
+export const loadEdgeImageSets = (dispatch, query) => {
+  dispatch({
+    type: LOAD_EDGE_IMAGE_SETS,
+    payload: fetchEdgeImageSets(query),
   }).catch(() => null);
 };
 
@@ -173,4 +176,25 @@ export const removeImagesToPoll = (ids) => {
     type: `${POLLING_IMAGES}_REMOVE`,
     ids,
   };
+};
+
+export const loadImageSetDetail = (dispatch, urlParam, query) => {
+  dispatch({
+    type: LOAD_IMAGE_SET_DETAIL,
+    payload: getImageSet({ id: urlParam, q: query }),
+  }).catch(() => null);
+};
+
+export const loadImagePackageMetadata = (dispatch, imageId) => {
+  dispatch({
+    type: LOAD_EDGE_IMAGE_PACKAGES,
+    payload: getImagePackageMetadata(imageId),
+  }).catch(() => null);
+};
+
+export const loadDeviceTable = (dispatch) => {
+  dispatch({
+    type: LOAD_DEVICE_TABLE,
+    payload: getInventory(),
+  }).catch(() => null);
 };

@@ -5,29 +5,38 @@ import {
   registration,
   review,
   packages,
+  repositories,
   imageSetDetails,
   imageOutput,
+  customPackages,
 } from './steps';
 import { Spinner } from '@patternfly/react-core';
 import PropTypes from 'prop-types';
 import ReviewStep from '../../components/form/ReviewStep';
-import { createNewImage, loadEdgeImages } from '../../store/actions';
-import { CREATE_NEW_IMAGE_RESET } from '../../store/action-types';
+import { createNewImage } from '../../store/actions';
 import { useDispatch } from 'react-redux';
 import { addNotification } from '@redhat-cloud-services/frontend-components-notifications/redux';
-import { getEdgeImageStatus } from '../../api';
+import { getEdgeImageStatus } from '../../api/images';
+import { useFeatureFlags } from '../../utils';
+import { DEFAULT_RELEASE, TEMPORARY_RELEASE } from '../../constants';
 
-const CreateImage = ({ navigateBack }) => {
+const CreateImage = ({ navigateBack, reload }) => {
   const [user, setUser] = useState();
   const dispatch = useDispatch();
+  const customRepoFlag = useFeatureFlags('fleet-management.custom-repos');
+  const temporaryReleasesFlag = useFeatureFlags(
+    'fleet-management.temporary-releases'
+  );
+
   const closeAction = () => {
     navigateBack();
-    dispatch({ type: CREATE_NEW_IMAGE_RESET });
+    reload && reload();
   };
   useEffect(() => {
     (async () => {
-      const userData = (await insights?.chrome?.auth?.getUser()) || {};
-      setUser(() => userData);
+      insights?.chrome?.auth
+        ?.getUser()
+        .then((result) => setUser(result != undefined ? result : {}));
     })();
   }, []);
 
@@ -84,18 +93,20 @@ const CreateImage = ({ navigateBack }) => {
                           description: `${resp.value.Name} image build is completed`,
                         })
                       ),
-                    (dispatch) => loadEdgeImages(dispatch),
                   ],
                 },
               },
             },
           });
           closeAction();
-          loadEdgeImages(dispatch);
         });
       }}
       defaultArch="x86_64"
-      initialValues={{ version: 0 }}
+      initialValues={{
+        version: 0,
+        release: temporaryReleasesFlag ? TEMPORARY_RELEASE : DEFAULT_RELEASE,
+        includesCustomRepos: customRepoFlag,
+      }}
       schema={{
         fields: [
           {
@@ -109,15 +120,25 @@ const CreateImage = ({ navigateBack }) => {
             },
             showTitles: true,
             title: 'Create image',
-            crossroads: ['target-environment', 'release', 'imageType'],
+            crossroads: [
+              'target-environment',
+              'release',
+              'imageType',
+              'third-party-repositories',
+              'imageOutput',
+              'imageSetDetails',
+              'includesCustomRepos',
+            ],
             // order in this array does not reflect order in wizard nav, this order is managed inside
             // of each step by `nextStep` property!
             fields: [
               imageSetDetails,
               imageOutput,
               registration,
+              repositories,
               packages,
               review,
+              customPackages,
             ],
           },
         ],
@@ -130,6 +151,7 @@ const CreateImage = ({ navigateBack }) => {
 
 CreateImage.propTypes = {
   navigateBack: PropTypes.func,
+  reload: PropTypes.func,
 };
 CreateImage.defaultProps = {
   navigateBack: () => undefined,

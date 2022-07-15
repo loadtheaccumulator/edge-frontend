@@ -1,10 +1,7 @@
 import React, { Fragment, useContext, useEffect } from 'react';
 import { TextContent, Text } from '@patternfly/react-core';
 import useFormApi from '@data-driven-forms/react-form-renderer/use-form-api';
-import {
-  imageTypeMapper,
-  releaseMapper,
-} from '../../Routes/ImageManagerDetail/constants';
+import { imageTypeMapper, releaseMapper } from '../../Routes/../constants';
 import { shallowEqual, useSelector } from 'react-redux';
 import { RegistryContext } from '../../store';
 import { createImageReducer } from '../../store/reducers';
@@ -41,7 +38,7 @@ const ReviewStep = () => {
 
   const details = [
     { name: 'Name', value: getState().values.name },
-    { name: 'Version', value: getState().initialValues.version + 1 },
+    { name: 'Version', value: String(getState().initialValues.version + 1) },
     { name: 'Description', value: getState().values.description },
   ];
 
@@ -64,8 +61,11 @@ const ReviewStep = () => {
     { name: 'ssh-key', value: getState().values.credentials },
   ];
 
-  const before = getState().initialValues['selected-packages'];
-  const after = getState().values['selected-packages'];
+  const RHELPackageBefore = getState().initialValues['selected-packages'] || [];
+  const RHELPackageAfter = getState().values['selected-packages'] || [];
+  const customPackageBefore = getState().initialValues['custom-packages'] || [];
+  const customPackageAfter = getState().values['custom-packages'] || [];
+
   const calcPkgDiff = (arr1, arr2) =>
     arr1.reduce(
       (acc, { name }) => acc + (!arr2.some((pkg) => pkg.name === name) ? 1 : 0),
@@ -74,18 +74,16 @@ const ReviewStep = () => {
 
   const packages = () => {
     const pkgs = [
+      getState().values?.includesCustomRepos && {
+        name: isUpdate ? 'Custom Updated' : 'Custom Added',
+        value: String(calcPkgDiff(customPackageAfter, customPackageBefore)),
+      },
       {
-        name: 'Added',
-        value: calcPkgDiff(after, before),
+        name: isUpdate ? 'RHEL Updated' : 'RHEL Added',
+        value: String(calcPkgDiff(RHELPackageAfter, RHELPackageBefore)),
       },
     ];
-    return isUpdate
-      ? [
-          ...pkgs,
-          { name: 'Removed', value: calcPkgDiff(before, after) },
-          { name: 'Updated', value: 0 },
-        ]
-      : pkgs;
+    return pkgs;
   };
 
   return (

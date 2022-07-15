@@ -1,272 +1,371 @@
-import React, {
-  Fragment,
-  useEffect,
-  useRef,
-  Suspense,
-  lazy,
-  useState,
-  useContext,
-} from 'react';
-import { useParams, Link, useHistory } from 'react-router-dom';
-import { useSelector, useDispatch, shallowEqual } from 'react-redux';
-import { PageHeader } from '@redhat-cloud-services/frontend-components/PageHeader';
-import { Main } from '@redhat-cloud-services/frontend-components/Main';
+import React, { useEffect, useState, Suspense } from 'react';
 import {
   Breadcrumb,
   BreadcrumbItem,
+  Dropdown,
+  DropdownItem,
+  DropdownToggle,
+  DropdownPosition,
+  Flex,
+  FlexItem,
   Skeleton,
-  Stack,
-  StackItem,
-  Button,
 } from '@patternfly/react-core';
-import { routes } from '../../../package.json';
-import { loadGroupsDetail, cleanEntities } from '../../store/actions';
 import {
-  groupsDetailReducer,
-  groupDevicesInfoReducer,
-} from '../../store/reducers';
-import GroupsDetailInfo from './GroupsDetailInfo';
-
-import { InventoryTable } from '@redhat-cloud-services/frontend-components/Inventory';
-import { systemsList } from '../../store/groupsDetail';
-const InventoryForm = lazy(() => import('../../components/InventoryForm'));
-import schema from './addDeviceSchema';
-import { groupsDetail, updateGroup } from '../../api';
+  PageHeader,
+  PageHeaderTitle,
+} from '@redhat-cloud-services/frontend-components/PageHeader';
+import { Main } from '@redhat-cloud-services/frontend-components/Main';
+import Empty from '../../components/Empty';
+import { Link, useHistory } from 'react-router-dom';
+import { routes as paths } from '../../constants/routeMapper';
+import CaretDownIcon from '@patternfly/react-icons/dist/esm/icons/caret-down-icon';
+import DeviceTable from '../Devices/DeviceTable';
+import { useParams } from 'react-router-dom';
 import {
-  statusMapper,
-  isEmptyFilters,
-  constructActiveFilters,
-  onDeleteFilter,
-} from '../../constants';
-import { RegistryContext } from '../../store';
+  getGroupById,
+  removeDeviceFromGroupById,
+  removeDevicesFromGroup,
+} from '../../api/groups';
+import AddSystemsToGroupModal from '../Devices/AddSystemsToGroupModal';
+import {
+  canUpdateSelectedDevices,
+  emptyStateNoFliters,
+  stateToUrlSearch,
+} from '../../utils';
+import useApi from '../../hooks/useApi';
+import apiWithToast from '../../utils/apiWithToast';
+import { useDispatch } from 'react-redux';
+import componentTypes from '@data-driven-forms/react-form-renderer/component-types';
+import { Bullseye, Spinner } from '@patternfly/react-core';
+import Modal from '../../components/Modal';
+import DeleteGroupModal from '../Groups/DeleteGroupModal';
+import RenameGroupModal from '../Groups/RenameGroupModal';
 
-const defaultFilters = {
-  name: {
-    label: 'Name',
-    value: '',
-  },
-  version: {
-    label: 'Version',
-    value: [],
-  },
-  status: {
-    label: 'Status',
-    value: [],
-  },
-};
+const UpdateDeviceModal = React.lazy(() =>
+  import('../Devices/UpdateDeviceModal')
+);
 
 const GroupsDetail = () => {
-  const { getRegistry } = useContext(RegistryContext);
-  const [isAddDeviceOpen, setIsAddDeviceOpen] = useState(false);
-  const [getEntities, setGetEntities] = useState();
-  const [unregister, setUnregister] = useState();
-  const [activeFilters, setActiveFilters] = useState(defaultFilters);
-  const history = useHistory();
-  const inventory = useRef(null);
-  const { uuid } = useParams();
   const dispatch = useDispatch();
-  const groupName = useSelector(
-    ({ groupsDetailReducer }) => groupsDetailReducer?.name || ''
-  );
-  const isLoading = useSelector(
-    ({ groupsDetailReducer }) => groupsDetailReducer?.isLoading
-  );
+  const params = useParams();
+  const history = useHistory();
+  const { groupId } = params;
 
-  const items = useSelector(
-    ({ groupsDetailReducer }) =>
-      groupsDetailReducer?.devices?.map(({ uuid, ...rest }) => ({
-        id: uuid,
-        ...rest,
-      })),
-    shallowEqual
-  );
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [removeModal, setRemoveModal] = useState({
+    isOpen: false,
+    name: '',
+    deviceId: null,
+  });
+  const [updateModal, setUpdateModal] = useState({
+    isOpen: false,
+    deviceData: null,
+    imageData: null,
+  });
+  const [response, fetchDevices] = useApi({
+    api: getGroupById,
+    id: groupId,
+    tableReload: true,
+  });
+  const { data, isLoading, hasError } = response;
+  const groupName = data?.DeviceGroup?.Name;
+  const [deviceIds, getDeviceIds] = useState([]);
+  const [hasModalSubmitted, setHasModalSubmitted] = useState(false);
+  const [modalState, setModalState] = useState({ id: null, name: '' });
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+
+  const handleDeleteModal = (id, name) => {
+    setModalState({ id, name });
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleRenameModal = (id, name) => {
+    setModalState({ id, name });
+    setIsRenameModalOpen(true);
+  };
+
+  const removeDeviceLabel = () =>
+    `Do you want to remove ${
+      deviceIds.length > 0
+        ? `${deviceIds.length} system${deviceIds.length === 1 ? '' : 's'}`
+        : `${removeModal.name}`
+    } from ${groupName}?`;
+
   useEffect(() => {
-    insights.chrome.registerModule('inventory');
-    const registered = getRegistry().register({
-      groupsDetailReducer,
-      groupDevicesInfoReducer,
+    history.push({
+      pathname: history.location.pathname,
+      search: stateToUrlSearch('add_system_modal=true', isAddModalOpen),
     });
-    dispatch(loadGroupsDetail(uuid));
-    return () => {
-      registered?.();
-      unregister?.();
-      dispatch(cleanEntities());
+  }, [isAddModalOpen]);
+
+  const handleSingleDeviceRemoval = () => {
+    const statusMessages = {
+      onSuccess: {
+        title: 'Success',
+        description: `${removeModal.name} has been removed successfully`,
+      },
+      onError: { title: 'Error', description: 'Failed to remove device' },
     };
-  }, []);
+    apiWithToast(
+      dispatch,
+      () => removeDeviceFromGroupById(groupId, removeModal.deviceId),
+      statusMessages
+    );
+    setTimeout(() => setHasModalSubmitted(true), 800);
+  };
+
+  const handleBulkDeviceRemoval = () => {
+    const statusMessages = {
+      onSuccess: {
+        title: 'Success',
+        description: `${deviceIds.length} systems have been removed successfully`,
+      },
+      onError: { title: 'Error', description: 'failed to remove systems' },
+    };
+    apiWithToast(
+      dispatch,
+      () =>
+        removeDevicesFromGroup(
+          parseInt(groupId),
+          deviceIds.map((device) => ({ ID: device.deviceID }))
+        ),
+      statusMessages
+    );
+    setTimeout(() => setHasModalSubmitted(true), 800);
+  };
 
   return (
-    <Fragment>
-      <PageHeader>
-        <Breadcrumb>
-          <BreadcrumbItem>
-            <Link to={routes.groups}>Groups</Link>
-          </BreadcrumbItem>
-          <BreadcrumbItem isActive>
-            {isLoading === false ? groupName : <Skeleton />}
-          </BreadcrumbItem>
-        </Breadcrumb>
-      </PageHeader>
-      <Main className="edge-groups--detail">
-        <Stack hasGutter>
-          <StackItem className="edge-groups--detail__info">
-            <GroupsDetailInfo uuid={uuid} />
-          </StackItem>
-          <StackItem isFilled>
-            <InventoryTable
-              ref={inventory}
-              page={1}
-              tableProps={{
-                canSelectAll: false,
-              }}
-              hideFilters={{ all: true }}
-              getEntities={async (_items, config) => {
-                const { results } = await groupsDetail(uuid, {});
-                const data = await getEntities?.(
-                  (results || []).map(({ uuid }) => uuid),
-                  {
-                    ...config,
-                    filter: {
-                      ...config.filter,
-                      system_profile: {
-                        ...config.filter?.system_profile,
-                        host_type: 'edge',
-                      },
-                      fields: {
-                        ...config?.fields,
-                        system_profile: [
-                          ...(config?.fields?.system_profile || []),
-                          'host_type',
-                        ],
-                      },
-                    },
-                    hasItems: true,
-                  },
-                  false
-                );
-                return {
-                  ...data,
-                  results: data.results.map((system) => ({
-                    ...system,
-                    ...results.find(({ uuid }) => uuid === system.id),
-                  })),
-                };
-              }}
-              filterConfig={{
-                items: [
-                  {
-                    label: activeFilters?.name?.label,
-                    filterValues: {
-                      key: 'text-filter',
-                      onChange: (event, value) =>
-                        setActiveFilters(() => ({
-                          ...activeFilters,
-                          name: {
-                            ...(activeFilters?.name || {}),
-                            value,
-                          },
-                        })),
-                      value: activeFilters?.name?.value || '',
-                    },
-                  },
-                  {
-                    label: activeFilters?.version?.label,
-                    type: 'checkbox',
-                    filterValues: {
-                      onChange: (event, value) =>
-                        setActiveFilters(() => ({
-                          ...(activeFilters || {}),
-                          version: {
-                            ...(activeFilters?.version || {}),
-                            value,
-                          },
-                        })),
-                      value: activeFilters?.version?.value || [],
-                      items: [
-                        {
-                          label: 'All versions',
-                          value: 'all',
-                        },
-                      ],
-                    },
-                  },
-                  {
-                    label: activeFilters?.status?.label,
-                    type: 'checkbox',
-                    filterValues: {
-                      onChange: (event, value) =>
-                        setActiveFilters(() => ({
-                          ...(activeFilters || {}),
-                          status: {
-                            ...(activeFilters?.status || {}),
-                            value,
-                          },
-                        })),
-                      items: statusMapper.map((item) => ({
-                        value: item,
-                        label: `${item.charAt(0).toUpperCase()}${item.slice(
-                          1
-                        )}`,
-                      })),
-                      value: activeFilters?.status?.value || [],
-                    },
-                  },
-                ],
-              }}
-              activeFiltersConfig={{
-                ...(isEmptyFilters(activeFilters) && {
-                  filters: constructActiveFilters(activeFilters),
-                }),
-                onDelete: (event, itemsToRemove, isAll) => {
-                  if (isAll) {
-                    setActiveFilters(defaultFilters);
-                  } else {
-                    setActiveFilters(() =>
-                      onDeleteFilter(activeFilters, itemsToRemove)
-                    );
-                  }
-                },
-              }}
-              onRowClick={(_e, id) => history.push(`/groups/${uuid}/${id}`)}
-              onLoad={({ mergeWithEntities, INVENTORY_ACTION_TYPES, api }) => {
-                setGetEntities(() => api?.getEntities);
-                setUnregister(() =>
-                  getRegistry().register({
-                    ...mergeWithEntities(systemsList(INVENTORY_ACTION_TYPES)),
-                  })
-                );
-              }}
-            >
-              <Button onClick={() => setIsAddDeviceOpen(true)}>
-                Add device
-              </Button>
-            </InventoryTable>
-          </StackItem>
-        </Stack>
-      </Main>
-      {isAddDeviceOpen && (
-        <Suspense fallback="">
-          <InventoryForm
-            selectedSystems={items}
-            schema={schema}
-            isOpened={isAddDeviceOpen}
-            title="Add new device"
-            onAction={(isSubmit, values) => {
-              if (isSubmit) {
-                (async () => {
-                  await updateGroup({
-                    uuid,
-                    systemIDs: values.selected,
-                  });
-                  dispatch(loadGroupsDetail(uuid));
-                  inventory.current.onRefreshData();
-                })();
+    <>
+      <PageHeader className="pf-m-light">
+        {groupName ? (
+          <Breadcrumb>
+            <BreadcrumbItem>
+              <Link to={`${paths['fleet-management']}`}>Groups</Link>
+            </BreadcrumbItem>
+            <BreadcrumbItem>{groupName}</BreadcrumbItem>
+          </Breadcrumb>
+        ) : (
+          <Breadcrumb isActive>
+            <Skeleton width="100px" />
+          </Breadcrumb>
+        )}
+        <Flex justifyContent={{ default: 'justifyContentSpaceBetween' }}>
+          <FlexItem>
+            {groupName ? (
+              <PageHeaderTitle title={groupName} />
+            ) : (
+              <Skeleton width="150px" />
+            )}
+          </FlexItem>
+          <FlexItem>
+            <Dropdown
+              position={DropdownPosition.right}
+              toggle={
+                <DropdownToggle
+                  id="image-set-details-dropdown"
+                  toggleIndicator={CaretDownIcon}
+                  onToggle={(newState) => setIsDropdownOpen(newState)}
+                  isDisabled={false}
+                >
+                  Actions
+                </DropdownToggle>
               }
-              setIsAddDeviceOpen(false);
+              isOpen={isDropdownOpen}
+              dropdownItems={[
+                <DropdownItem
+                  key="delete-device-group"
+                  onClick={() => handleDeleteModal(groupId, groupName)}
+                >
+                  Delete group
+                </DropdownItem>,
+                <DropdownItem
+                  key="rename-device-group"
+                  onClick={() => handleRenameModal(groupId, groupName)}
+                >
+                  Rename group
+                </DropdownItem>,
+                <DropdownItem
+                  key="update-all-devices"
+                  isDisabled={canUpdateSelectedDevices({
+                    deviceData: data?.DevicesView?.devices?.map((device) => ({
+                      imageSetId: device?.ImageSetID,
+                    })),
+                    imageData: data?.DevicesView?.devices?.some(
+                      (device) => device.ImageID
+                    ),
+                  })}
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    setUpdateModal((prevState) => ({
+                      ...prevState,
+                      isOpen: true,
+                      deviceData: data?.DevicesView?.devices?.map((device) => ({
+                        id: device?.DeviceUUID,
+                        display_name:
+                          device?.DeviceName === ''
+                            ? 'localhost'
+                            : device?.DeviceName,
+                      })),
+                      imageSetId: data?.DevicesView?.devices.find(
+                        (device) => device.ImageSetID
+                      )?.ImageSetID,
+                    }));
+                  }}
+                >
+                  Update
+                </DropdownItem>,
+              ]}
+            />
+          </FlexItem>
+        </Flex>
+      </PageHeader>
+      <Main className="edge-devices">
+        {!emptyStateNoFliters(
+          isLoading,
+          data?.DeviceGroup?.Devices.length,
+          history
+        ) ? (
+          <DeviceTable
+            data={data?.DevicesView?.devices || []}
+            count={data?.DevicesView?.total}
+            isLoading={isLoading}
+            hasError={hasError}
+            hasCheckbox={true}
+            handleSingleDeviceRemoval={handleSingleDeviceRemoval}
+            kebabItems={[
+              {
+                isDisabled: !(deviceIds.length > 0),
+                title: 'Remove from group',
+                onClick: () =>
+                  setRemoveModal({
+                    name: '',
+                    deviceId: null,
+                    isOpen: true,
+                  }),
+              },
+              {
+                isDisabled: canUpdateSelectedDevices({
+                  deviceData: deviceIds,
+                  imageData: deviceIds[0]?.updateImageData,
+                }),
+                title: 'Update selected',
+                onClick: () =>
+                  setUpdateModal((prevState) => ({
+                    ...prevState,
+                    isOpen: true,
+                    deviceData: [...deviceIds],
+                    imageSetId: deviceIds.find((device) => device?.imageSetId)
+                      .imageSetId,
+                  })),
+              },
+            ]}
+            selectedItems={getDeviceIds}
+            setRemoveModal={setRemoveModal}
+            setIsAddModalOpen={setIsAddModalOpen}
+            setUpdateModal={setUpdateModal}
+            hasModalSubmitted={hasModalSubmitted}
+            setHasModalSubmitted={setHasModalSubmitted}
+            fetchDevices={fetchDevices}
+            isAddSystemsView={true}
+          />
+        ) : (
+          <Flex justifyContent={{ default: 'justifyContentCenter' }}>
+            <Empty
+              icon="plus"
+              title="Add systems to the group"
+              body="Create groups to help manage your systems more effectively."
+              primaryAction={{
+                text: 'Add systems',
+                click: () => setIsAddModalOpen(true),
+              }}
+              secondaryActions={[
+                {
+                  type: 'link',
+                  title: 'Learn more about system groups',
+                  link: 'https://access.redhat.com/documentation/en-us/edge_management/2022/html-single/working_with_systems_in_the_edge_management_application/index',
+                },
+              ]}
+            />
+          </Flex>
+        )}
+      </Main>
+      {isAddModalOpen && (
+        <AddSystemsToGroupModal
+          groupId={groupId}
+          closeModal={() => setIsAddModalOpen(false)}
+          isOpen={isAddModalOpen}
+          reloadData={fetchDevices}
+          groupName={data?.DeviceGroup?.Name}
+        />
+      )}
+      {removeModal.isOpen && (
+        <Modal
+          isOpen={removeModal.isOpen}
+          openModal={() => setRemoveModal(false)}
+          title={'Remove from group'}
+          submitLabel={'Remove'}
+          variant="danger"
+          schema={{
+            fields: [
+              {
+                component: componentTypes.PLAIN_TEXT,
+                name: 'warning-text',
+                label: removeDeviceLabel(),
+              },
+            ],
+          }}
+          onSubmit={
+            removeModal.deviceId
+              ? handleSingleDeviceRemoval
+              : handleBulkDeviceRemoval
+          }
+          reloadData={fetchDevices}
+        />
+      )}
+
+      {updateModal.isOpen && (
+        <Suspense
+          fallback={
+            <Bullseye>
+              <Spinner />
+            </Bullseye>
+          }
+        >
+          <UpdateDeviceModal
+            navigateBack={() => {
+              history.push({ pathname: history.location.pathname });
+              setUpdateModal((prevState) => {
+                return {
+                  ...prevState,
+                  isOpen: false,
+                };
+              });
             }}
+            setUpdateModal={setUpdateModal}
+            updateModal={updateModal}
+            refreshTable={fetchDevices}
           />
         </Suspense>
       )}
-    </Fragment>
+      {isDeleteModalOpen && (
+        <DeleteGroupModal
+          isModalOpen={isDeleteModalOpen}
+          setIsModalOpen={setIsDeleteModalOpen}
+          reloadData={() => history.push(paths['fleet-management'])}
+          modalState={modalState}
+        />
+      )}
+      {isRenameModalOpen && (
+        <RenameGroupModal
+          isModalOpen={isRenameModalOpen}
+          setIsModalOpen={setIsRenameModalOpen}
+          reloadData={() => fetchDevices()}
+          modalState={modalState}
+        />
+      )}
+    </>
   );
 };
 

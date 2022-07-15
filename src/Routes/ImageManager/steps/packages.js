@@ -2,7 +2,7 @@ import React from 'react';
 import componentTypes from '@data-driven-forms/react-form-renderer/component-types';
 import { Text, TextContent } from '@patternfly/react-core';
 import useFormApi from '@data-driven-forms/react-form-renderer/use-form-api';
-import { releaseMapper } from '../../ImageManagerDetail/constants';
+import { releaseMapper } from '../../../constants';
 
 const PackagesLabel = () => {
   const { getState } = useFormApi();
@@ -21,6 +21,7 @@ export default {
   title: 'Additional packages',
   name: 'packages',
   nextStep: 'review',
+  substepOf: 'Add content',
   fields: [
     {
       component: componentTypes.PLAIN_TEXT,

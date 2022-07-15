@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import LoadingCard from '@redhat-cloud-services/frontend-components-inventory-general-info/LoadingCard';
-import { getImageDataOnDevice } from '../api/index';
-import { routes as paths } from '../../package.json';
+import { getImageDataOnDevice } from '../api/images';
+import { routes as paths } from '../constants/routeMapper';
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
@@ -39,7 +39,9 @@ const ImageInformationCard = () => {
           value: isImageInfoLoading ? (
             <Skeleton size={SkeletonSize.sm} />
           ) : imageData ? (
-            <Link to={`${paths['manage-images']}/${imageData?.Image?.ID}`}>
+            <Link
+              to={`${paths['manage-images']}/${imageData?.Image?.ImageSetID}/details`}
+            >
               {imageData?.Image?.Name}
             </Link>
           ) : (
@@ -51,7 +53,9 @@ const ImageInformationCard = () => {
           value: isImageInfoLoading ? (
             <Skeleton size={SkeletonSize.sm} />
           ) : imageData ? (
-            <Link to={`${paths['manage-images']}/${imageData?.Image?.ID}`}>
+            <Link
+              to={`${paths['manage-images']}/${imageData?.Image?.ImageSetID}/versions/${imageData?.Image?.ID}/details`}
+            >
               {imageData?.Image?.Version}
             </Link>
           ) : (
@@ -64,17 +68,9 @@ const ImageInformationCard = () => {
             <Skeleton size={SkeletonSize.sm} />
           ) : imageData?.UpdatesAvailable ? (
             <Link
-              to={`${paths['manage-images']}/${
-                imageData?.UpdatesAvailable[
-                  imageData?.UpdatesAvailable.length - 1
-                ]?.Image?.ID
-              }`}
+              to={`${paths['manage-images']}/${imageData?.UpdatesAvailable[0]?.Image?.ImageSetID}/versions/${imageData?.UpdatesAvailable[0]?.Image?.ID}/details`}
             >
-              {
-                imageData?.UpdatesAvailable[
-                  imageData?.UpdatesAvailable.length - 1
-                ]?.Image?.Version
-              }
+              {imageData?.UpdatesAvailable[0]?.Image?.Version}
             </Link>
           ) : hasError ? (
             'unavailable'
@@ -86,9 +82,11 @@ const ImageInformationCard = () => {
           title: 'Rollback version',
           value: isImageInfoLoading ? (
             <Skeleton size={SkeletonSize.sm} />
-          ) : imageData?.Rollback?.ParentId ? (
-            <Link to={`${paths['manage-images']}/${imageData?.Rollback?.ID}`}>
-              {imageData?.Rollback?.Version}
+          ) : imageData?.RollbackImage?.ID ? (
+            <Link
+              to={`${paths['manage-images']}/${imageData?.RollbackImage?.ImageSetID}/versions/${imageData?.RollbackImage?.ID}/details`}
+            >
+              {imageData?.RollbackImage?.Version}
             </Link>
           ) : hasError ? (
             'unavailable'

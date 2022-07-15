@@ -6,7 +6,8 @@ import validatorTypes from '@data-driven-forms/react-form-renderer/validator-typ
 export default {
   title: 'Device registration',
   name: 'registration',
-  nextStep: 'packages',
+  nextStep: ({ values }) =>
+    values?.includesCustomRepos ? 'repositories' : 'packages',
   fields: [
     {
       component: componentTypes.PLAIN_TEXT,
@@ -20,7 +21,7 @@ export default {
       helperText: (
         <HelperText>
           <HelperTextItem className="pf-u-mt-xs" variant="indeterminate">
-            Can only contain letters, numbers, hyphen ( - ), and underscores( _
+            Can only contain letters, numbers, hyphens ( - ), and underscores( _
             ).
           </HelperTextItem>
         </HelperText>
@@ -32,7 +33,7 @@ export default {
           type: validatorTypes.PATTERN,
           pattern: /^[A-Za-z0-9]+[A-Za-z0-9_-]*$/,
           message:
-            'Can only contain letters, numbers, hyphen ( - ), and underscores( _ ).',
+            'Can only contain letters, numbers, hyphens ( - ), and underscores( _ ).',
         },
         { type: validatorTypes.MAX_LENGTH, threshold: 50 },
         { type: 'reservedUsernameValidator' },

@@ -4,7 +4,6 @@ import { Grid, GridItem } from '@patternfly/react-core';
 import {
   Breadcrumb,
   BreadcrumbItem,
-  Label,
   Bullseye,
   Spinner,
 } from '@patternfly/react-core';
@@ -13,7 +12,6 @@ import {
   SkeletonSize,
 } from '@redhat-cloud-services/frontend-components/Skeleton';
 import { PageHeader } from '@redhat-cloud-services/frontend-components/PageHeader';
-import { Main } from '@redhat-cloud-services/frontend-components/Main';
 import {
   InventoryDetailHead,
   DetailWrapper,
@@ -24,10 +22,8 @@ import { deviceDetail } from '../../store/deviceDetail';
 import { RegistryContext } from '../../store';
 import systemProfileStore from '@redhat-cloud-services/frontend-components-inventory-general-info/redux';
 import DeviceDetailTabs from './DeviceDetailTabs';
-import CheckCircleIcon from '@patternfly/react-icons/dist/js/icons/check-circle-icon';
-import ExclamationTriangleIcon from '@patternfly/react-icons/dist/js/icons/exclamation-triangle-icon';
-import InProgressIcon from '@patternfly/react-icons/dist/js/icons/in-progress-icon';
-import { getDeviceHasUpdate } from '../../api/index';
+import { getDeviceHasUpdate } from '../../api/devices';
+import Status from '../../components/Status';
 
 const UpdateDeviceModal = React.lazy(() =>
   import(
@@ -36,11 +32,10 @@ const UpdateDeviceModal = React.lazy(() =>
 );
 
 const DeviceDetail = () => {
+  const [imageId, setImageId] = useState(null);
   const { getRegistry } = useContext(RegistryContext);
   const { inventoryId, uuid } = useParams();
-  const displayName = useSelector(
-    ({ entityDetails }) => entityDetails?.entity?.display_name
-  );
+  const entity = useSelector(({ entityDetails }) => entityDetails?.entity);
   const groupName = useSelector(
     ({ groupsDetailReducer }) => groupsDetailReducer?.name
   );
@@ -48,11 +43,13 @@ const DeviceDetail = () => {
     ({ entityDetails }) => entityDetails?.entity?.id
   );
 
+  const [imageData, setImageData] = useState();
   const [updateModal, setUpdateModal] = useState({
     isOpen: false,
     deviceData: null,
   });
   const [isDeviceStatusLoading, setIsDeviceStatusLoading] = useState(true);
+  const [reload, setReload] = useState(false);
   useEffect(() => {
     insights.chrome.registerModule('inventory');
     insights.chrome?.hideGlobalFilter?.(true);
@@ -61,25 +58,25 @@ const DeviceDetail = () => {
 
   useEffect(() => {
     (async () => {
-      if (!displayName) {
+      if (!entity?.display_name) {
         return;
       }
       const image_data = await getDeviceHasUpdate(deviceId);
+      setImageData(image_data);
       setIsDeviceStatusLoading(false);
       setUpdateModal((prevState) => ({
         ...prevState,
-        deviceData: {
-          display_name: displayName,
-          system_profile: {
-            image_data,
-            status: image_data?.UpdateTransactions?.filter(
-              (item) => item.Status === 'BUILDING' || item.Status === 'CREATED'
-            ),
+        deviceData: [
+          {
+            display_name: entity.display_name,
+            id: entity.id,
           },
-        },
+        ],
+        imageSetId: image_data?.ImageInfo?.Image?.ImageSetID,
       }));
+      setImageId(image_data?.ImageInfo?.Image?.ID);
     })();
-  }, [displayName]);
+  }, [entity, reload]);
 
   useEffect(() => {
     insights?.chrome?.appObjectId?.(inventoryId);
@@ -100,8 +97,8 @@ const DeviceDetail = () => {
         <PageHeader>
           <Breadcrumb ouiaId="systems-list">
             <BreadcrumbItem>
-              <Link to={uuid ? `/groups` : '/fleet-management'}>
-                {uuid ? 'Groups' : 'Fleet management'}
+              <Link to={uuid ? `/groups` : '/inventory'}>
+                {uuid ? 'Groups' : 'Systems'}
               </Link>
             </BreadcrumbItem>
             {uuid && (
@@ -115,7 +112,7 @@ const DeviceDetail = () => {
             )}
             <BreadcrumbItem isActive>
               <div className="ins-c-inventory__detail--breadcrumb-name">
-                {displayName || <Skeleton size={SkeletonSize.xs} />}
+                {entity?.display_name || <Skeleton size={SkeletonSize.xs} />}
               </div>
             </BreadcrumbItem>
           </Breadcrumb>
@@ -125,12 +122,14 @@ const DeviceDetail = () => {
               {
                 title: 'Update',
                 isDisabled:
-                  updateModal.deviceData?.system_profile?.image_data?.UpdateTransactions?.filter(
-                    (item) =>
-                      item.Status === 'BUILDING' || item.Status === 'CREATED'
-                  ).length > 0 ||
-                  !updateModal.deviceData?.system_profile?.image_data?.ImageInfo
-                    ?.UpdatesAvailable,
+                  imageData?.UpdateTransactions?.[
+                    imageData?.UpdateTransactions.length - 1
+                  ]?.Status === 'BUILDING' ||
+                  imageData?.UpdateTransactions?.[
+                    imageData?.UpdateTransactions.length - 1
+                  ]?.Status === 'CREATED' ||
+                  !imageData?.ImageInfo?.UpdatesAvailable?.length > 0 ||
+                  !updateModal.imageSetId,
                 onClick: () => {
                   setUpdateModal((prevState) => ({
                     ...prevState,
@@ -145,64 +144,58 @@ const DeviceDetail = () => {
 
           {isDeviceStatusLoading ? (
             <Skeleton size={SkeletonSize.xs} />
-          ) : updateModal?.deviceData?.system_profile?.status?.length > 0 ? (
-            <Label
+          ) : imageData?.UpdateTransactions[
+              imageData?.UpdateTransactions?.length - 1
+            ]?.Status === 'BUILDING' ||
+            imageData?.UpdateTransactions[
+              imageData?.UpdateTransactions?.length - 1
+            ]?.Status === 'CREATED' ? (
+            <Status type="updating" isLabel={true} className="pf-u-mt-sm" />
+          ) : imageData?.Device?.UpdateAvailable ? (
+            <Status
+              type="updateAvailable"
+              isLabel={true}
               className="pf-u-mt-sm"
-              color="blue"
-              icon={<InProgressIcon />}
-            >
-              Updating
-            </Label>
-          ) : updateModal?.deviceData?.system_profile?.image_data?.ImageInfo
-              ?.UpdatesAvailable?.length > 0 ? (
-            <Label
-              className="pf-u-mt-sm"
-              color="orange"
-              icon={<ExclamationTriangleIcon />}
-            >
-              Update Available
-            </Label>
+            />
           ) : (
-            <Label
-              className="pf-u-mt-sm"
-              color="green"
-              icon={<CheckCircleIcon color="green" />}
-            >
-              Running
-            </Label>
+            <Status type="running" isLabel={true} className="pf-u-mt-sm" />
           )}
         </PageHeader>
-        <Main className="edge-c-device--detail">
-          <Grid gutter="md">
-            <GridItem span={12}>
-              <DeviceDetailTabs />
-            </GridItem>
-          </Grid>
-        </Main>
+        <Grid gutter="md">
+          <GridItem span={12}>
+            <DeviceDetailTabs
+              systemProfile={imageData}
+              imageId={imageId}
+              setUpdateModal={setUpdateModal}
+              setReload={setReload}
+            />
+          </GridItem>
+        </Grid>
+        {updateModal.isOpen && (
+          <Suspense
+            fallback={
+              <Bullseye>
+                <Spinner />
+              </Bullseye>
+            }
+          >
+            <UpdateDeviceModal
+              navigateBack={() => {
+                history.push({ pathname: history.location.pathname });
+                setUpdateModal((prevState) => {
+                  return {
+                    ...prevState,
+                    isOpen: false,
+                  };
+                });
+              }}
+              setUpdateModal={setUpdateModal}
+              updateModal={updateModal}
+              refreshTable={() => setReload(true)}
+            />
+          </Suspense>
+        )}
       </DetailWrapper>
-      {updateModal.isOpen && (
-        <Suspense
-          fallback={
-            <Bullseye>
-              <Spinner />
-            </Bullseye>
-          }
-        >
-          <UpdateDeviceModal
-            navigateBack={() => {
-              history.push({ pathname: history.location.pathname });
-              setUpdateModal((prevState) => {
-                return {
-                  ...prevState,
-                  isOpen: false,
-                };
-              });
-            }}
-            setUpdateModal={setUpdateModal}
-            updateModal={updateModal}
-          />
-        </Suspense>
-      )}
     </>
   );
 };

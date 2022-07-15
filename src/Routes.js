@@ -1,8 +1,9 @@
 import { Redirect, Route, Switch } from 'react-router-dom';
 
 import React, { Suspense } from 'react';
-import { routes as paths } from '../package.json';
+import { routes as paths } from './constants/routeMapper';
 import { Bullseye, Spinner } from '@patternfly/react-core';
+import { useFeatureFlags } from './utils';
 // const Groups = React.lazy(() =>
 //   import(/* webpackChunkName: "GroupsPage" */ './Routes/Groups/Groups')
 // );
@@ -24,8 +25,20 @@ const DeviceDetail = React.lazy(() =>
 //   )
 // );
 
-const Devices = React.lazy(() =>
-  import(/* webpackChunkName: "GroupsDetailPage" */ './Routes/Devices/Devices')
+const Groups = React.lazy(() =>
+  import(/* webpackChunkName: "GroupsDetailPage" */ './Routes/Groups/Groups')
+);
+
+const GroupsDetail = React.lazy(() =>
+  import(
+    /* webpackChunkName: "GroupsDetailPage" */ './Routes/GroupsDetail/GroupsDetail'
+  )
+);
+
+const Inventory = React.lazy(() =>
+  import(
+    /* webpackChunkName: "GroupsDetailPage" */ './Routes/Devices/Inventory'
+  )
 );
 
 const Images = React.lazy(() =>
@@ -35,9 +48,15 @@ const Images = React.lazy(() =>
 );
 
 const ImageDetail = React.lazy(() =>
-  import(
-    /* webpackChunkName: "GroupsDetailPage" */ './Routes/ImageManagerDetail/ImageDetail'
-  )
+  import('./Routes/ImageManagerDetail/ImageDetail')
+);
+
+const Repositories = React.lazy(() =>
+  import('./Routes/Repositories/Repositories')
+);
+
+const LearningResources = React.lazy(() =>
+  import('./Routes/LearningResources/LearningResources')
 );
 
 export const Routes = () => {
@@ -50,16 +69,32 @@ export const Routes = () => {
       }
     >
       <Switch>
-        {/* <Route exact path={paths.groups} component={Groups} /> */}
-        {/* <Route exact path={paths['groups-detail']} component={GroupsDetail} /> */}
+        <Route exact path={paths.groups} component={Groups} />
+        <Route exact path={paths['groups-detail']} component={GroupsDetail} />
         {/* <Route path={paths['device-detail']} component={DeviceDetail} /> */}
         {/* <Route path={paths.canaries} component={Canaries} /> */}
-        <Route exact path={paths['fleet-management']} component={Devices} />
+        <Route exact path={paths['fleet-management']} component={Groups} />
+        <Route
+          exact
+          path={paths['fleet-management-detail']}
+          component={GroupsDetail}
+        />
+        <Route exact path={paths['inventory']} component={Inventory} />
+        <Route path={paths['inventory-detail']} component={DeviceDetail} />
+        <Route
+          path={paths['manage-images-detail-version']}
+          component={ImageDetail}
+        />
         <Route path={paths['manage-images-detail']} component={ImageDetail} />
         <Route path={paths['manage-images']} component={Images} />
+
+        {useFeatureFlags('fleet-management.custom-repos') && (
+          <Route exact path={paths['repositories']} component={Repositories} />
+        )}
         <Route
-          path={paths['fleet-management-detail']}
-          component={DeviceDetail}
+          exact
+          path={paths['learning-resources']}
+          component={LearningResources}
         />
         <Route>
           <Redirect to={paths['fleet-management']} />
